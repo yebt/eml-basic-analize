@@ -10,7 +10,8 @@ interface Header {
 }
 
 interface MailData {
-  headers: Header[]
+  headers: Header[],
+  body: string
 }
 
 interface IpData {

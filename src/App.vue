@@ -1,12 +1,37 @@
-<script setup>
-import {ref, computed} from 'vue';
+<script setup lang="ts">
+import { toast } from 'toaster-ts';
+import { ref, computed } from 'vue'
 
-const emailData = ref(null);
+// -------------------------------------------------------------------
+// TYPES
+interface Header {
+  name: string,
+  value: string
+}
+
+interface MailData {
+  headers: Header[]
+}
+
+interface IpData {
+  ip: string,
+  country_name: string,
+  country_code: string,
+  region_name: string,
+  city: string,
+  lat: string,
+  lon: string,
+  isp: string,
+}
+
+// -------------------------------------------------------------------
+const emailData = ref<MailData | null>(null);
 const loading = ref(false);
 const error = ref('');
 const searchTerm = ref('');
-const ipGeoData = ref([]);
-const extractedIPs = ref([]);
+const ipGeoData = ref<IpData[]>([]);
+const extractedIPs = ref<string[]>([]);
+const fileInput = ref<HTMLHtmlElement | null>(null)
 
 const filteredHeaders = computed(() => {
   if (!emailData.value || !searchTerm.value) {
@@ -14,7 +39,7 @@ const filteredHeaders = computed(() => {
   }
   return emailData.value.headers.filter(header =>
     header.name.toLowerCase().includes(searchTerm.value.toLowerCase()) ||
-      header.value.toLowerCase().includes(searchTerm.value.toLowerCase())
+    header.value.toLowerCase().includes(searchTerm.value.toLowerCase())
   );
 });
 
@@ -23,15 +48,20 @@ const uniqueCountries = computed(() => {
   return [...new Set(countries)];
 });
 
-const handleFileSelect = (event) => {
-  const file = event.target.files[0];
+const handleFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const files = target.files ?? []
+  if (!files) {
+    return
+  }
+  const file = files[0]
   if (file) {
     processEMLFile(file);
   }
 };
 
-const handleFileDrop = (event) => {
-  const file = event.dataTransfer.files[0];
+const handleFileDrop = (event: DragEvent) => {
+  const file = event.dataTransfer?.files[0];
   if (file && file.name.endsWith('.eml')) {
     processEMLFile(file);
   } else {
@@ -39,7 +69,7 @@ const handleFileDrop = (event) => {
   }
 };
 
-const processEMLFile = async (file) => {
+const processEMLFile = async (file: File) => {
   loading.value = true;
   error.value = '';
 
@@ -56,13 +86,13 @@ const processEMLFile = async (file) => {
       await getGeoLocationData(ips);
     }
   } catch (err) {
-    error.value = 'Error al procesar el archivo: ' + err.message;
+    error.value = 'Error al procesar el archivo: ' + (err as Error).message;
   } finally {
     loading.value = false;
   }
 };
 
-const parseEMLContent = (content) => {
+const parseEMLContent = (content: string) => {
   const lines = content.split('\n');
   const headers = [];
   let body = '';
@@ -99,9 +129,9 @@ const parseEMLContent = (content) => {
   return { headers, body: body.trim() };
 };
 
-const extractIPAddresses = (headers) => {
+const extractIPAddresses = (headers: Header[]): string[] => {
   const ipRegex = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g;
-  const ips = new Set();
+  const ips = new Set<string>();
 
   headers.forEach(header => {
     const matches = header.value.match(ipRegex);
@@ -118,18 +148,18 @@ const extractIPAddresses = (headers) => {
   return Array.from(ips);
 };
 
-const isPrivateIP = (ip) => {
+const isPrivateIP = (ip: string) => {
   const parts = ip.split('.').map(Number);
   return (
     (parts[0] === 10) ||
-      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-      (parts[0] === 192 && parts[1] === 168) ||
-      (parts[0] === 127)
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168) ||
+    (parts[0] === 127)
   );
 };
 
-const getGeoLocationData = async (ips) => {
-  const geoPromises = ips.map(async (ip) => {
+const getGeoLocationData = async (ips: string[]) => {
+  const geoPromises = ips.map(async (ip: string): Promise<IpData | null> => {
     try {
       // Using ip-api.com free API (no key required)
       const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,lat,lon,isp,query`);
@@ -145,7 +175,7 @@ const getGeoLocationData = async (ips) => {
           lat: data.lat,
           lon: data.lon,
           isp: data.isp
-        };
+        } as IpData;
       }
       return null;
     } catch (err) {
@@ -155,10 +185,11 @@ const getGeoLocationData = async (ips) => {
   });
 
   const results = await Promise.all(geoPromises);
-  ipGeoData.value = results.filter(Boolean);
+  const filteredResults = results.filter((ipdataEl: IpData | null) => !!ipdataEl);
+  ipGeoData.value = filteredResults
 };
 
-const getCountryFlag = (countryCode) => {
+const getCountryFlag = (countryCode: string | null) => {
   if (!countryCode) return '🏳️';
   const flagOffset = 0x1F1E6;
   const asciiOffset = 0x41;
@@ -167,11 +198,10 @@ const getCountryFlag = (countryCode) => {
   return String.fromCodePoint(firstChar, secondChar);
 };
 
-const copyToClipboard = async (text) => {
+const copyToClipboard = async (text: string) => {
   try {
     await navigator.clipboard.writeText(text);
-    // Simple feedback - you could add a toast notification here
-    console.log('Copiado al portapapeles');
+    toast.success('Header copied')
   } catch (err) {
     console.error('Error al copiar:', err);
   }
@@ -193,8 +223,9 @@ const clearSearch = () => {
 
     <!-- File Upload Section -->
     <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
-      <div class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors"
-        @dragover.prevent @drop.prevent="handleFileDrop" @click="$refs.fileInput.click()">
+      <div
+        class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors"
+        @dragover.prevent @drop.prevent="handleFileDrop" @click="fileInput?.click()">
         <input ref="fileInput" type="file" accept=".eml" @change="handleFileSelect" class="hidden">
         <div class="text-6xl mb-4">📁</div>
         <h3 class="text-xl font-semibold text-slate-700 mb-2">Selecciona un archivo .eml</h3>
@@ -216,8 +247,7 @@ const clearSearch = () => {
         <!-- Search Bar -->
         <div class="bg-white rounded-xl shadow-lg p-6">
           <div class="flex gap-4">
-            <input v-model="searchTerm"
-              placeholder="Buscar en headers..."
+            <input v-model="searchTerm" placeholder="Buscar en headers..."
               class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             <button @click="clearSearch"
               class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors">
@@ -276,7 +306,7 @@ const clearSearch = () => {
                   </td>
                   <td class="py-3 px-4">
                     <button @click="copyToClipboard(header.value)"
-                      class="text-blue-600 hover:text-blue-800 text-sm underline">
+                      class="text-blue-600 hover:text-blue-800 text-sm underline cursor-pointer">
                       Copiar
                     </button>
                   </td>
@@ -330,16 +360,23 @@ const clearSearch = () => {
 </template>
 
 <style>
-.fade-enter-active, .fade-leave-active {
+.fade-enter-active,
+.fade-leave-active {
   transition: opacity 0.3s ease;
 }
-.fade-enter-from, .fade-leave-to {
+
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
 }
-.slide-enter-active, .slide-leave-active {
+
+.slide-enter-active,
+.slide-leave-active {
   transition: all 0.3s ease;
 }
-.slide-enter-from, .slide-leave-to {
+
+.slide-enter-from,
+.slide-leave-to {
   transform: translateY(-10px);
   opacity: 0;
 }

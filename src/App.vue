@@ -163,7 +163,7 @@ const getGeoLocationData = async (ips: string[]) => {
   const geoPromises = ips.map(async (ip: string): Promise<IpData | null> => {
     try {
       // Using ip-api.com free API (no key required)
-      const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,lat,lon,isp,query`);
+      const response = await fetch(`https://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,lat,lon,isp,query`);
       const data = await response.json();
 
       if (data.status === 'success') {
